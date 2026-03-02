@@ -1,0 +1,15 @@
+six==1.16.0
+soupsieve==2.4
+SQLAlchemy==2.0.47
+sqlparse==0.4.4
+starlette==0.52.1
+stopwords==1.0.0
+tqdm==4.65.0
+tweepy==4.13.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzdata==2023.3
+urllib3==1.26.15
+uvicorn==0.41.0
+Werkzeug==3.0.3
+yarl==1.8.2
