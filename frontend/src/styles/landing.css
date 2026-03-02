@@ -1,0 +1,66 @@
+.landing-container {
+  height: calc(100vh - 60px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  text-align: center;
+  color: white;
+  padding: 20px;
+}
+
+.hero-section {
+  max-width: 800px;
+}
+
+.hero-title {
+  font-size: 42px;
+  margin-bottom: 20px;
+}
+
+.hero-title span {
+  color: #4da8ff;
+}
+
+.hero-subtitle {
+  font-size: 18px;
+  margin-bottom: 30px;
+  color: #d1d5db;
+}
+
+.hero-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.primary-btn {
+  padding: 12px 25px;
+  background: #4da8ff;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  color: white;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.primary-btn:hover {
+  background: #1e90ff;
+}
+
+.secondary-btn {
+  padding: 12px 25px;
+  background: transparent;
+  border: 2px solid white;
+  border-radius: 6px;
+  font-size: 15px;
+  color: white;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.secondary-btn:hover {
+  background: white;
+  color: #203a43;
+}
