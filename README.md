@@ -137,7 +137,7 @@ Password: admin@123
 ---
 ## 🔐 User Login
 Email:- karan5000@gmail.com
-password:- karan@1234
+Password:- Karan@1234
 
 ---
 
