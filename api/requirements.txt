@@ -1,48 +1,16 @@
-# ==============================
-# Core Build Tools
-# ==============================
 setuptools>=68.0.0
 wheel
-
-# ==============================
-# FastAPI & ASGI Server
-# ==============================
 fastapi==0.110.0
 uvicorn[standard]==0.29.0
 gunicorn==21.2.0
-
-# ==============================
-# Database
-# ==============================
 SQLAlchemy==2.0.29
 psycopg2-binary==2.9.9
 alembic==1.13.1
-
-# ==============================
-# Validation (Pydantic v2)
-# ==============================
-pydantic==2.6.4
-pydantic-settings==2.2.1
+pydantic==1.10.13
 email-validator==2.1.1
-
-# ==============================
-# Authentication / Security
-# ==============================
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-
-# ==============================
-# File Upload
-# ==============================
 python-multipart==0.0.9
-
-# ==============================
-# Environment Variables
-# ==============================
-python-dotenv==1.0.1
-
-# ==============================
-# Utilities
-# ==============================
+python-dotenv==1.2.2
 nltk==3.8.1
 multidict==6.0.4
