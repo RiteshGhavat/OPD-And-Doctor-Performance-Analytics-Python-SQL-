@@ -113,7 +113,7 @@ venv\Scripts\activate
 pip install -r requirements.txt  
 uvicorn app:app --reload  
 
-Backend URL: http://127.0.0.1:8000
+Backend URL: [http://127.0.0.1:8000](https://opd-and-doctor-performance-analytics.onrender.com)
 
 ---
 
@@ -123,7 +123,7 @@ cd frontend
 npm install  
 npm start  
 
-Frontend URL: http://localhost:3000
+Frontend URL: [http://localhost:3000](https://opd-analytics-frontend.onrender.com)
 
 ---
 
