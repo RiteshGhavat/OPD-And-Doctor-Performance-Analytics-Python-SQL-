@@ -9,26 +9,19 @@ from models.models import Patient
 from models.schemas import PatientRegister
 from auth_utils import hash_password
 
-router = APIRouter(
-    prefix="/register",
-    tags=["Public Registration"]  
-)
+router = APIRouter(prefix="/register", tags=["Public Registration"])
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def register_user(data: PatientRegister, db: Session = Depends(get_db)):
     try:
-        # 🔍 Check email uniqueness
-        existing_user = db.query(Patient).filter(
+        existing = db.query(Patient).filter(
             func.lower(Patient.email) == data.email.lower(),
             Patient.deleted_at.is_(None)
         ).first()
 
-        if existing_user:
-            raise HTTPException(
-                status_code=400,
-                detail="Email already exists"
-            )
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already exists")
 
         new_user = Patient(
             name=data.name,
@@ -41,7 +34,7 @@ def register_user(data: PatientRegister, db: Session = Depends(get_db)):
             city=data.city,
             pincode=data.pincode,
             emergency_contact=data.emergency_contact,
-            role="user",               
+            role="user",
             flag="Show",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -56,8 +49,8 @@ def register_user(data: PatientRegister, db: Session = Depends(get_db)):
             "message": "Registration successful. Please login.",
             "data": {
                 "user_id": new_user.patient_id,
-                "email": new_user.email,
-                "role": new_user.role
+                "email":   new_user.email,
+                "role":    new_user.role
             }
         }
 

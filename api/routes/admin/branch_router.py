@@ -10,75 +10,48 @@ from models.models import Branch
 router = APIRouter(tags=["Branch"])
 
 
-# DROPDOWN API (PUBLIC / SIMPLE LIST)
+# ── PUBLIC DROPDOWN ──────────────────────────────────────────────────────────
 
 @router.get("/branch")
 def get_branches_dropdown(db: Session = Depends(get_db)):
     return (
         db.query(Branch)
-        .filter(
-            Branch.flag == "Show",
-            Branch.deleted_at.is_(None)
-        )
+        .filter(Branch.flag == "Show", Branch.deleted_at.is_(None))
         .order_by(Branch.branch_name)
         .all()
     )
 
 
-#  ADMIN: GET BRANCHES (PAGINATION)
+# ── ADMIN: LIST WITH PAGINATION ──────────────────────────────────────────────
 
 @router.get("/admin/branch")
 def get_branches(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=10, le=100),
-    db: Session = Depends(get_db)
+    page:  int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db:    Session = Depends(get_db)
 ):
     try:
-        offset = (page - 1) * limit
-
-        total = db.query(Branch).filter(
-            Branch.flag == "Show",
-            Branch.deleted_at.is_(None)
-        ).count()
-
-        branches = (
-            db.query(Branch)
-            .filter(
-                Branch.flag == "Show",
-                Branch.deleted_at.is_(None)
-            )
-            .order_by(Branch.branch_name)
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-
-        return {
-            "total": total,
-            "data": branches
-        }
-
+        offset   = (page - 1) * limit
+        base     = db.query(Branch).filter(Branch.flag == "Show", Branch.deleted_at.is_(None))
+        total    = base.count()
+        branches = base.order_by(Branch.branch_name).offset(offset).limit(limit).all()
+        return {"total": total, "page": page, "limit": limit, "data": branches}
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-#  ADMIN: CREATE BRANCH
+# ── ADMIN: CREATE ────────────────────────────────────────────────────────────
 
 @router.post("/admin/branch")
 def create_branch(data: dict, db: Session = Depends(get_db)):
     try:
-        # 🔍 Duplicate branch name check
         exists = db.query(Branch).filter(
             func.lower(Branch.branch_name) == data["branch_name"].lower(),
             Branch.deleted_at.is_(None)
         ).first()
 
         if exists:
-            raise HTTPException(
-                status_code=400,
-                detail="Branch name already exists"
-            )
+            raise HTTPException(status_code=400, detail="Branch name already exists")
 
         branch = Branch(
             branch_name=data["branch_name"],
@@ -89,12 +62,10 @@ def create_branch(data: dict, db: Session = Depends(get_db)):
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
-
         db.add(branch)
         db.commit()
         db.refresh(branch)
-
-        return {"message": "Branch created successfully"}
+        return {"message": "Branch created successfully", "branch_id": branch.branch_id}
 
     except HTTPException:
         raise
@@ -103,7 +74,7 @@ def create_branch(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-#  ADMIN: UPDATE BRANCH
+# ── ADMIN: UPDATE ────────────────────────────────────────────────────────────
 
 @router.put("/admin/branch/{branch_id}")
 def update_branch(branch_id: int, data: dict, db: Session = Depends(get_db)):
@@ -122,12 +93,8 @@ def update_branch(branch_id: int, data: dict, db: Session = Depends(get_db)):
             Branch.branch_id != branch_id,
             Branch.deleted_at.is_(None)
         ).first()
-
         if exists:
-            raise HTTPException(
-                status_code=400,
-                detail="Branch name already exists"
-            )
+            raise HTTPException(status_code=400, detail="Branch name already exists")
 
     for key, value in data.items():
         if hasattr(branch, key):
@@ -135,12 +102,10 @@ def update_branch(branch_id: int, data: dict, db: Session = Depends(get_db)):
 
     branch.updated_at = datetime.utcnow()
     db.commit()
-
     return {"message": "Branch updated successfully"}
 
 
-
-#  ADMIN: SOFT DELETE BRANCH
+# ── ADMIN: SOFT DELETE ───────────────────────────────────────────────────────
 
 @router.post("/admin/branch/{branch_id}/soft-delete")
 def soft_delete_branch(branch_id: int, db: Session = Depends(get_db)):
@@ -153,10 +118,8 @@ def soft_delete_branch(branch_id: int, db: Session = Depends(get_db)):
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
 
-    branch.flag = "Delete"
+    branch.flag       = "Delete"
     branch.deleted_at = datetime.utcnow()
     branch.updated_at = datetime.utcnow()
-
     db.commit()
-
     return {"message": "Branch deleted successfully"}

@@ -1,49 +1,34 @@
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
-# Load .env variables
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Create database engine
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set in environment variables!")
+
+# Railway/Render sometimes return postgres:// — SQLAlchemy requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    connect_args={"sslmode": "require"}  # Required for Render PostgreSQL
+    connect_args={"sslmode": "require"},  # Required for Render PostgreSQL
+    pool_pre_ping=True,                    # Auto-reconnect on dropped connections
+    pool_recycle=300                       # Recycle connections every 5 minutes
 )
 
-# Create session
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base model
 Base = declarative_base()
 
-# FastAPI app
-app = FastAPI()
 
-
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-
-# Test database connection
-@app.get("/test-db")
-def test_db(db: Session = Depends(get_db)):
-    result = db.execute(text("SELECT 1"))
-    return {
-        "message": "Database connected successfully",
-        "result": result.scalar()
-    }

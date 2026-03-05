@@ -1,234 +1,95 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, desc
+from sqlalchemy import func, extract
+from sqlalchemy.exc import SQLAlchemyError
+from typing import Optional
+
 from database import get_db
-from models.models import Branch, Doctor, OPDVisit, OPDBilling
+from models.models import OPDBilling, OPDVisit, Branch
 
-router = APIRouter(
-    prefix="/admin/analytics/revenue",
-    tags=["Revenue Analytics"]
-)
+router = APIRouter(prefix="/admin/analytics", tags=["Analytics - Revenue"])
 
 
-# TASK 5 Monthly Revenue per Branch (Gross & Net)
+# ── MONTHLY REVENUE BY BRANCH ────────────────────────────────────────────────
 
-@router.get("/monthly-branch")
-def monthly_branch_revenue(db: Session = Depends(get_db)):
-    try:
-        month_label = func.to_char(OPDBilling.created_at, "YYYY-MM")
-
-        results = (
-            db.query(
-                Branch.branch_name.label("branch"),
-                month_label.label("month"),
-
-                func.coalesce(
-                    func.sum(OPDBilling.consultation_fee + OPDBilling.additional_charges),
-                    0
-                ).label("gross"),
-
-                func.coalesce(
-                    func.sum(
-                        (OPDBilling.consultation_fee + OPDBilling.additional_charges)
-                        - OPDBilling.total_amount
-                    ), 0
-                ).label("discount"),
-
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (OPDBilling.payment_status == "Paid", OPDBilling.paid_amount),
-                            else_=0
-                        )
-                    ), 0
-                ).label("net"),
-            )
-            .join(OPDVisit, OPDVisit.visit_id == OPDBilling.visit_id)
-            .join(Branch, Branch.branch_id == OPDVisit.branch_id)
-            .filter(
-                OPDBilling.deleted_at.is_(None),
-                OPDVisit.deleted_at.is_(None),
-                OPDVisit.visit_status != "Cancelled"
-            )
-            .group_by(Branch.branch_name, month_label)
-            .order_by(month_label)
-            .all()
-        )
-
-        return {"success": True, "data": [dict(r._mapping) for r in results]}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-#  TASK 8 REVENUE BREAKDOWN PIE CHART
-
-@router.get("/revenue-pie")
-def revenue_pie(
-    branch_id: int | None = Query(None),
-    db: Session = Depends(get_db)
+@router.get("/revenue")
+def revenue_by_branch(
+    branch_id: Optional[int] = Query(None),
+    year:      Optional[int] = Query(None),
+    db:        Session = Depends(get_db)
 ):
-    """
-    Pie Chart:
-    - Gross Revenue
-    - Discounts
-    - Net Revenue
-    """
     try:
         query = (
             db.query(
-                func.coalesce(
-                    func.sum(OPDBilling.consultation_fee + OPDBilling.additional_charges),
-                    0
-                ).label("gross"),
-
-                func.coalesce(
-                    func.sum(
-                        (OPDBilling.consultation_fee + OPDBilling.additional_charges)
-                        - OPDBilling.total_amount
-                    ), 0
-                ).label("discount"),
-
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (OPDBilling.payment_status == "Paid", OPDBilling.paid_amount),
-                            else_=0
-                        )
-                    ), 0
-                ).label("net"),
+                Branch.branch_name,
+                extract("year",  OPDVisit.visit_datetime).label("year"),
+                extract("month", OPDVisit.visit_datetime).label("month"),
+                func.coalesce(func.sum(OPDBilling.total_amount), 0).label("gross_revenue"),
+                func.coalesce(func.sum(OPDBilling.paid_amount),  0).label("net_revenue")
             )
-            .join(OPDVisit, OPDVisit.visit_id == OPDBilling.visit_id)
-            .filter(
-                OPDBilling.deleted_at.is_(None),
-                OPDVisit.deleted_at.is_(None),
-                OPDVisit.visit_status != "Cancelled"
-            )
+            .join(OPDVisit, OPDBilling.visit_id == OPDVisit.visit_id)
+            .join(Branch,   OPDVisit.branch_id  == Branch.branch_id)
+            .filter(OPDBilling.flag == "Show")
         )
 
         if branch_id:
             query = query.filter(OPDVisit.branch_id == branch_id)
+        if year:
+            query = query.filter(extract("year", OPDVisit.visit_datetime) == year)
 
-        result = query.one()
+        results = (
+            query
+            .group_by(
+                Branch.branch_name,
+                extract("year",  OPDVisit.visit_datetime),
+                extract("month", OPDVisit.visit_datetime)
+            )
+            .order_by(
+                extract("year",  OPDVisit.visit_datetime),
+                extract("month", OPDVisit.visit_datetime)
+            )
+            .all()
+        )
 
-        return {
-            "success": True,
-            "data": [
-                {"label": "Gross Revenue", "value": float(result.gross)},
-                {"label": "Discounts", "value": float(result.discount)},
-                {"label": "Net Revenue", "value": float(result.net)},
-            ]
-        }
+        return [
+            {
+                "branch_name":   r.branch_name,
+                "year":          int(r.year),
+                "month":         int(r.month),
+                "gross_revenue": float(r.gross_revenue),
+                "net_revenue":   float(r.net_revenue)
+            }
+            for r in results
+        ]
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# TASK 6 Avg Ticket Size by Payment Mode (USED BY UI)
+# ── PAYMENT MODE ANALYTICS ───────────────────────────────────────────────────
 
-@router.get("/avg-ticket")
-def avg_ticket_size(db: Session = Depends(get_db)):
+@router.get("/payment-modes")
+def payment_modes(db: Session = Depends(get_db)):
     try:
         results = (
             db.query(
-                OPDBilling.payment_mode.label("payment_mode"),
-                func.coalesce(func.avg(OPDBilling.paid_amount), 0).label("avg_ticket"),
-                func.coalesce(func.sum(OPDBilling.paid_amount), 0).label("total"),
+                OPDBilling.payment_mode,
+                func.count(OPDBilling.bill_id).label("total_bills"),
+                func.coalesce(func.avg(OPDBilling.total_amount), 0).label("avg_ticket_size")
             )
-            .filter(
-                OPDBilling.deleted_at.is_(None),
-                OPDBilling.payment_status == "Paid"
-            )
+            .filter(OPDBilling.flag == "Show")
             .group_by(OPDBilling.payment_mode)
             .all()
         )
 
-        return {
-            "success": True,
-            "data": [
-                {
-                    "payment_mode": r.payment_mode or "Unknown",
-                    "avg_ticket": float(r.avg_ticket),
-                    "total": float(r.total),
-                }
-                for r in results
-            ],
-        }
+        return [
+            {
+                "payment_mode":    r.payment_mode,
+                "total_bills":     r.total_bills,
+                "avg_ticket_size": round(float(r.avg_ticket_size), 2)
+            }
+            for r in results
+        ]
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-#  TASK 9 PAYMENT MODE PIE CHART
-
-@router.get("/payment-mode-pie")
-def payment_mode_pie(db: Session = Depends(get_db)):
-    try:
-        results = (
-            db.query(
-                OPDBilling.payment_mode.label("label"),
-                func.coalesce(func.sum(OPDBilling.paid_amount), 0).label("value")
-            )
-            .filter(
-                OPDBilling.deleted_at.is_(None),
-                OPDBilling.payment_status == "Paid"
-            )
-            .group_by(OPDBilling.payment_mode)
-            .all()
-        )
-
-        return {
-            "success": True,
-            "data": [
-                {"label": r.label or "Unknown", "value": float(r.value)}
-                for r in results
-            ]
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-# TASK 7 Revenue Contribution per Doctor
-
-@router.get("/doctor-contribution")
-def doctor_revenue(
-    page: int = Query(1, ge=1),
-    limit: int = Query(5, ge=1),
-    db: Session = Depends(get_db),
-):
-    try:
-        query = (
-            db.query(
-                Doctor.doctor_name.label("doctor_name"),
-                func.count(OPDVisit.visit_id).label("visits"),
-                func.coalesce(func.sum(OPDBilling.paid_amount), 0).label("revenue"),
-                func.coalesce(func.avg(OPDBilling.paid_amount), 0).label("revenue_per_visit"),
-            )
-            .join(OPDVisit, OPDVisit.doctor_id == Doctor.doctor_id)
-            .join(OPDBilling, OPDBilling.visit_id == OPDVisit.visit_id)
-            .filter(
-                OPDBilling.deleted_at.is_(None),
-                OPDBilling.payment_status == "Paid",
-            )
-            .group_by(Doctor.doctor_name)
-        )
-
-        total = query.count()
-
-        results = (
-            query.order_by(desc("revenue"))
-            .offset((page - 1) * limit)
-            .limit(limit)
-            .all()
-        )
-
-        return {
-            "success": True,
-            "total": total,
-            "data": [dict(r._mapping) for r in results]
-        }
-
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))

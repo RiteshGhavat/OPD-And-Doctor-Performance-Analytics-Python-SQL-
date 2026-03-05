@@ -1,122 +1,88 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session, joinedload
-from datetime import date
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
-from models import Patient, OPDVisit
+from models.models import OPDVisit, OPDDiagnosis, OPDPrescription, OPDBilling, Patient
 from role_checker import user_required
 
-router = APIRouter(prefix="/user", tags=["User Dashboard"])
+router = APIRouter(prefix="/user/dashboard", tags=["User Dashboard"])
 
 
-@router.get("/dashboard/")
+@router.get("/", status_code=status.HTTP_200_OK)
 def user_dashboard(
-    db: Session = Depends(get_db),
+    db:           Session = Depends(get_db),
     current_user: Patient = Depends(user_required)
 ):
-
-
-    visits = (
-        db.query(OPDVisit)
-        .options(
-            joinedload(OPDVisit.doctor),
-            joinedload(OPDVisit.branch),
-            joinedload(OPDVisit.diagnoses),
-            joinedload(OPDVisit.prescriptions),
-            joinedload(OPDVisit.billing)
-        )
-        .filter(OPDVisit.patient_id == current_user.patient_id)
-        .all()
-    )
-
-    result = []
-
-    for visit in visits:
-        result.append({
-            "visit_id": visit.visit_id,
-            "visit_datetime": visit.visit_datetime,
-            "consultation_type": visit.consultation_type,
-            "visit_status": visit.visit_status,
-            "token_number": visit.token_number,
-            "follow_up_date": visit.follow_up_date,
-
-            "doctor": {
-                "id": visit.doctor.doctor_id if visit.doctor else None,
-                "name": visit.doctor.doctor_name if visit.doctor else None,
-                "specialization": visit.doctor.specialization if visit.doctor else None,
-                "qualification": visit.doctor.qualification if visit.doctor else None,
-                "experience": visit.doctor.experience_years if visit.doctor else None,
-                "consultation_fee": float(visit.doctor.consultation_fee) if visit.doctor and visit.doctor.consultation_fee else 0
-            },
-
-            "branch": {
-                "id": visit.branch.branch_id if visit.branch else None,
-                "name": visit.branch.branch_name if visit.branch else None,
-                "city": visit.branch.city if visit.branch else None,
-                "address": visit.branch.address if visit.branch else None,
-                "phone": visit.branch.phone if visit.branch else None,
-            },
-
-            "diagnosis": [
-                {
-                    "name": d.diagnosis_name,
-                    "notes": d.notes
-                }
-                for d in visit.diagnoses
-            ],
-
-            "prescriptions": [
-                {
-                    "medicine": p.medicine_name,
-                    "dose": p.dose,
-                    "frequency": p.frequency,
-                    "duration": p.duration_days,
-                    "instructions": p.instructions
-                }
-                for p in visit.prescriptions
-            ],
-
-            "billing": {
-                "invoice_number": visit.billing.invoice_number if visit.billing else None,
-                "consultation_fee": float(visit.billing.consultation_fee) if visit.billing and visit.billing.consultation_fee else 0,
-                "additional_charges": float(visit.billing.additional_charges) if visit.billing else 0,
-                "discount": float(visit.billing.discount_amount) if visit.billing else 0,
-                "total": float(visit.billing.total_amount) if visit.billing else 0,
-                "paid": float(visit.billing.paid_amount) if visit.billing else 0,
-                "payment_mode": visit.billing.payment_mode if visit.billing else None,
-                "status": visit.billing.payment_status if visit.billing else None
-            }
-        })
-
-
-    calculated_age = None
-
-    if current_user.date_of_birth:
-        today = date.today()
-        calculated_age = (
-            today.year - current_user.date_of_birth.year
-            - (
-                (today.month, today.day)
-                < (current_user.date_of_birth.month, current_user.date_of_birth.day)
+    try:
+        visits = (
+            db.query(OPDVisit)
+            .filter(
+                OPDVisit.patient_id == current_user.patient_id,
+                OPDVisit.flag == "Show",
+                OPDVisit.deleted_at.is_(None)
             )
+            .order_by(OPDVisit.visit_datetime.desc())
+            .limit(10)
+            .all()
         )
 
+        visit_data = []
+        for v in visits:
+            diagnoses = (
+                db.query(OPDDiagnosis.diagnosis_name)
+                .filter(OPDDiagnosis.visit_id == v.visit_id, OPDDiagnosis.flag == "Show")
+                .all()
+            )
+            prescriptions = (
+                db.query(
+                    OPDPrescription.medicine_name,
+                    OPDPrescription.dose,
+                    OPDPrescription.duration_days
+                )
+                .filter(OPDPrescription.visit_id == v.visit_id, OPDPrescription.flag == "Show")
+                .all()
+            )
+            billing = (
+                db.query(OPDBilling)
+                .filter(OPDBilling.visit_id == v.visit_id, OPDBilling.flag == "Show")
+                .first()
+            )
 
-    return {
-        "patient": {
-            "id": current_user.patient_id,
-            "name": current_user.name,
-            "email": current_user.email,
-            "phone": current_user.phone,
-            "gender": current_user.gender,
-            "date_of_birth": current_user.date_of_birth,
-            "age": calculated_age,
-            "address": current_user.address,
-            "city": current_user.city,
-            "pincode": current_user.pincode,
-            "emergency_contact": current_user.emergency_contact,
-            "created_at": current_user.created_at,
-        },
-        "visits": result
-    }
-    
+            visit_data.append({
+                "visit_id":          v.visit_id,
+                "visit_datetime":    str(v.visit_datetime),
+                "consultation_type": v.consultation_type,
+                "visit_status":      v.visit_status,
+                "doctor_name":       v.doctor.doctor_name if v.doctor else None,
+                "branch_name":       v.branch.branch_name if v.branch else None,
+                "diagnoses":         [d.diagnosis_name for d in diagnoses],
+                "prescriptions": [
+                    {"medicine": p.medicine_name, "dose": p.dose, "days": p.duration_days}
+                    for p in prescriptions
+                ],
+                "billing": {
+                    "total_amount":   float(billing.total_amount)  if billing else None,
+                    "paid_amount":    float(billing.paid_amount)   if billing else None,
+                    "payment_status": billing.payment_status       if billing else None,
+                } if billing else None
+            })
+
+        total_visits = db.query(OPDVisit).filter(
+            OPDVisit.patient_id == current_user.patient_id,
+            OPDVisit.flag == "Show"
+        ).count()
+
+        return {
+            "patient": {
+                "name":   current_user.name,
+                "email":  current_user.email,
+                "phone":  current_user.phone,
+                "gender": current_user.gender,
+            },
+            "total_visits":  total_visits,
+            "recent_visits": visit_data
+        }
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -4,18 +4,19 @@ from datetime import datetime, date
 from decimal import Decimal
 import re
 
-# PATIENT SCHEMAS (PUBLIC REGISTER)
+
+# ── PATIENT REGISTER (PUBLIC) ─────────────────────────────────────────────────
 
 class PatientRegister(BaseModel):
-    name: str = Field(..., min_length=3, max_length=150)
-    email: EmailStr
-    phone: str
-    password: str = Field(..., min_length=6)
-    gender: str
-    date_of_birth: date
-    address: str = Field(..., min_length=5)
-    city: str = Field(..., min_length=2)
-    pincode: str
+    name:              str = Field(..., min_length=3, max_length=150)
+    email:             EmailStr
+    phone:             str
+    password:          str = Field(..., min_length=6)
+    gender:            str
+    date_of_birth:     date
+    address:           str = Field(..., min_length=5)
+    city:              str = Field(..., min_length=2)
+    pincode:           str
     emergency_contact: str
 
     @field_validator("phone")
@@ -56,224 +57,180 @@ class PatientRegister(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# BRANCH SCHEMAS
+# ── LOGIN ─────────────────────────────────────────────────────────────────────
+
+class PatientLogin(BaseModel):
+    email:    EmailStr
+    password: str
+
+
+# ── BRANCH ───────────────────────────────────────────────────────────────────
 
 class BranchBase(BaseModel):
     branch_name: str
-    city: Optional[str]
-
+    city:        Optional[str] = None
 
 class BranchCreate(BranchBase):
     pass
 
-
 class BranchResponse(BranchBase):
     branch_id: int
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-
-# DOCTOR SCHEMAS
+# ── DOCTOR ───────────────────────────────────────────────────────────────────
 
 class DoctorBase(BaseModel):
-    branch_id: int
-    doctor_name: str
-    specialization: Optional[str] = None
-    qualification: Optional[str] = None
-    experience_years: Optional[int] = None
+    branch_id:        int
+    doctor_name:      str
+    specialization:   Optional[str]   = None
+    qualification:    Optional[str]   = None
+    experience_years: Optional[int]   = None
     consultation_fee: Optional[float] = None
-    joining_date: Optional[date] = None
-    status: Optional[str] = "Active"
-
+    joining_date:     Optional[date]  = None
+    status:           Optional[str]   = "Active"
 
 class DoctorCreate(DoctorBase):
     pass
 
-
 class DoctorUpdate(BaseModel):
-    branch_id: Optional[int] = None
-    doctor_name: Optional[str] = None
-    specialization: Optional[str] = None
-    qualification: Optional[str] = None
-    experience_years: Optional[int] = None
+    branch_id:        Optional[int]   = None
+    doctor_name:      Optional[str]   = None
+    specialization:   Optional[str]   = None
+    qualification:    Optional[str]   = None
+    experience_years: Optional[int]   = None
     consultation_fee: Optional[float] = None
-    joining_date: Optional[date] = None
-    status: Optional[str] = None
-
+    joining_date:     Optional[date]  = None
+    status:           Optional[str]   = None
 
 class DoctorResponse(DoctorBase):
-    doctor_id: int
+    doctor_id:   int
     branch_name: Optional[str] = None
-
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
-
-# OPD VISIT SCHEMAS
-
+# ── OPD VISIT ────────────────────────────────────────────────────────────────
 
 class OPDVisitBase(BaseModel):
-    patient_id: int
-    doctor_id: int
-    branch_id: int
-    visit_datetime: datetime
+    patient_id:        int
+    doctor_id:         int
+    branch_id:         int
+    visit_datetime:    datetime
     consultation_type: Optional[str] = "New"
-
 
 class OPDVisitCreate(OPDVisitBase):
     pass
 
-
 class OPDVisitResponse(OPDVisitBase):
     visit_id: int
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-
-# DIAGNOSIS SCHEMAS
-
+# ── DIAGNOSIS ────────────────────────────────────────────────────────────────
 
 class DiagnosisBase(BaseModel):
-    visit_id: int
+    visit_id:       int
     diagnosis_name: str
-
 
 class DiagnosisCreate(DiagnosisBase):
     pass
 
-
 class DiagnosisResponse(DiagnosisBase):
     diagnosis_id: int
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-# PRESCRIPTION SCHEMAS
-
+# ── PRESCRIPTION ─────────────────────────────────────────────────────────────
 
 class PrescriptionBase(BaseModel):
-    visit_id: int
+    visit_id:      int
     medicine_name: str
-    dose: Optional[str]
-    duration_days: Optional[int]
-
+    dose:          Optional[str] = None
+    duration_days: Optional[int] = None
 
 class PrescriptionCreate(PrescriptionBase):
     pass
 
-
 class PrescriptionResponse(PrescriptionBase):
     prescription_id: int
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-
-# BILLING SCHEMAS
-
+# ── BILLING ──────────────────────────────────────────────────────────────────
 
 class BillingBase(BaseModel):
-    visit_id: int
-    consultation_fee: Decimal
-    additional_charges: Optional[Decimal] = 0
-    discount_amount: Optional[Decimal] = 0
-    payment_mode: str
-
+    visit_id:           int
+    consultation_fee:   Decimal
+    additional_charges: Optional[Decimal] = Decimal("0")
+    discount_amount:    Optional[Decimal] = Decimal("0")
+    payment_mode:       str
 
 class BillingCreate(BillingBase):
     pass
 
-
 class BillingResponse(BillingBase):
-    bill_id: int
+    bill_id:      int
     total_amount: Decimal
-    paid_amount: Decimal
-
-    class Config:
-        from_attributes = True
+    paid_amount:  Decimal
+    model_config = {"from_attributes": True}
 
 
-
-# BULK INSERT
-
+# ── BULK INSERT ──────────────────────────────────────────────────────────────
 
 class BulkVisitCreate(BaseModel):
     visits: List[OPDVisitCreate]
 
 
-# ANALYTICS RESPONSES
-
+# ── ANALYTICS RESPONSES ──────────────────────────────────────────────────────
 
 class DoctorLoadResponse(BaseModel):
-    branch_name: str
-    doctor_name: str
+    branch_name:  str
+    doctor_name:  str
     total_visits: int
 
-
 class RevenueResponse(BaseModel):
-    branch_name: str
-    month: str
+    branch_name:   str
+    month:         str
     gross_revenue: Decimal
-    net_revenue: Decimal
-
+    net_revenue:   Decimal
 
 class DiagnosisAnalyticsResponse(BaseModel):
     specialization: str
     diagnosis_name: str
-    total_count: int
-
+    total_count:    int
 
 class PaymentAnalyticsResponse(BaseModel):
-    payment_mode: str
+    payment_mode:    str
     avg_ticket_size: Decimal
 
-
 class PeakHourResponse(BaseModel):
-    branch_name: str
-    hour: int
+    branch_name:  str
+    hour:         int
     total_visits: int
 
 
-
-# LOGIN SCHEMA
-
-class PatientLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-
-
-#  ADMIN USER SCHEMAS (ADDED)
-
+# ── ADMIN USER SCHEMAS ───────────────────────────────────────────────────────
 
 class AdminPatientCreate(BaseModel):
-    name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    password: str = Field(..., min_length=6)
-    gender: Optional[str] = None
-    date_of_birth: Optional[date] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    pincode: Optional[str] = None
+    name:              str
+    email:             EmailStr
+    phone:             Optional[str] = None
+    password:          str = Field(..., min_length=6)
+    gender:            Optional[str] = None
+    date_of_birth:     Optional[date] = None
+    address:           Optional[str] = None
+    city:              Optional[str] = None
+    pincode:           Optional[str] = None
     emergency_contact: Optional[str] = None
-
 
 class AdminPatientUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    password: Optional[str] = None
-    gender: Optional[str] = None
-    date_of_birth: Optional[date] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    pincode: Optional[str] = None
-    emergency_contact: Optional[str] = None
+    name:              Optional[str]      = None
+    email:             Optional[EmailStr] = None
+    phone:             Optional[str]      = None
+    password:          Optional[str]      = None
+    gender:            Optional[str]      = None
+    date_of_birth:     Optional[date]     = None
+    address:           Optional[str]      = None
+    city:              Optional[str]      = None
+    pincode:           Optional[str]      = None
+    emergency_contact: Optional[str]      = None
