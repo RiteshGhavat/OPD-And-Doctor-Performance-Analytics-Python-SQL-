@@ -1,131 +1,150 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional
 
 from database import get_db
-from models.models import OPDVisit, Doctor, Branch, OPDDiagnosis, OPDBilling
 
 router = APIRouter(prefix="/admin/analytics", tags=["Analytics - Doctor"])
 
 
-# ── DOCTOR OPD LOAD (paginated) ──────────────────────────────────────────────
+# ── DOCTOR OPD LOAD (paginated) ───────────────────────────────────────────────
+# Uses CTE + COUNT(*) OVER() to get total in one pass — avoids broken .count()
 @router.get("/doctors/opd-load")
 def doctor_opd_load(
-    page: int = Query(1),
-    limit: int = Query(5),
-    db: Session = Depends(get_db)
+    page:  int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=100),
+    db:    Session = Depends(get_db)
 ):
     try:
-        query = (
-            db.query(
-                Doctor.doctor_name,
-                Branch.branch_name,
-                func.to_char(OPDVisit.visit_datetime, 'YYYY-MM').label("month"),
-                func.count(OPDVisit.visit_id).label("visit_count")
+        sql = text("""
+            WITH agg AS (
+                SELECT
+                    d.doctor_name,
+                    b.branch_name,
+                    TO_CHAR(v.visit_datetime, 'YYYY-MM')  AS month,
+                    COUNT(v.visit_id)                     AS visit_count,
+                    COUNT(*) OVER()                       AS total_count
+                FROM opd_visit v
+                INNER JOIN doctor d ON d.doctor_id = v.doctor_id
+                INNER JOIN branch b ON b.branch_id = v.branch_id
+                WHERE v.flag = 'Show' AND v.deleted_at IS NULL
+                GROUP BY d.doctor_name, b.branch_name,
+                         TO_CHAR(v.visit_datetime, 'YYYY-MM')
+                ORDER BY visit_count DESC
+                LIMIT  :limit
+                OFFSET :offset
             )
-            .join(Doctor, OPDVisit.doctor_id == Doctor.doctor_id)
-            .join(Branch, OPDVisit.branch_id == Branch.branch_id)
-            .filter(OPDVisit.flag == "Show", OPDVisit.deleted_at.is_(None))
-            .group_by(Doctor.doctor_name, Branch.branch_name,
-                      func.to_char(OPDVisit.visit_datetime, 'YYYY-MM'))
-            .order_by(func.count(OPDVisit.visit_id).desc())
-        )
+            SELECT * FROM agg
+        """)
 
-        total = query.count()
-        results = query.offset((page - 1) * limit).limit(limit).all()
+        rows = db.execute(sql, {"limit": limit, "offset": (page - 1) * limit}).mappings().all()
+        total = int(rows[0]["total_count"]) if rows else 0
 
         return {
             "data": [
                 {
-                    "doctor_name": r.doctor_name,
-                    "branch_name": r.branch_name,
-                    "month":       r.month,
-                    "visit_count": r.visit_count
-                } for r in results
+                    "doctor_name": r["doctor_name"],
+                    "branch_name": r["branch_name"],
+                    "month":       r["month"],
+                    "visit_count": r["visit_count"],
+                } for r in rows
             ],
-            "total": total
+            "total": total,
         }
 
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── DOCTOR PERFORMANCE (paginated) ──────────────────────────────────────────
+# ── DOCTOR PERFORMANCE (paginated) ───────────────────────────────────────────
 @router.get("/doctors/performance")
 def doctor_performance(
-    page: int = Query(1),
-    limit: int = Query(5),
-    db: Session = Depends(get_db)
+    page:  int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=100),
+    db:    Session = Depends(get_db)
 ):
     try:
-        query = (
-            db.query(
-                Doctor.doctor_name,
-                func.count(OPDVisit.visit_id).label("total_visits"),
-                func.coalesce(func.sum(OPDBilling.total_amount), 0).label("total_revenue"),
-                func.coalesce(func.avg(OPDBilling.total_amount), 0).label("avg_fee")
+        sql = text("""
+            WITH agg AS (
+                SELECT
+                    d.doctor_name,
+                    d.specialization,
+                    COUNT(v.visit_id)                              AS total_visits,
+                    COALESCE(SUM(b.total_amount), 0)               AS total_revenue,
+                    COALESCE(AVG(b.total_amount), 0)               AS avg_fee,
+                    COUNT(*) OVER()                                AS total_count
+                FROM opd_visit v
+                INNER JOIN doctor      d ON d.doctor_id = v.doctor_id
+                LEFT  JOIN opd_billing b ON b.visit_id  = v.visit_id
+                WHERE v.flag = 'Show' AND v.deleted_at IS NULL
+                GROUP BY d.doctor_name, d.specialization
+                ORDER BY total_visits DESC
+                LIMIT  :limit
+                OFFSET :offset
             )
-            .join(Doctor, OPDVisit.doctor_id == Doctor.doctor_id)
-            .outerjoin(OPDBilling, OPDVisit.visit_id == OPDBilling.visit_id)
-            .filter(OPDVisit.flag == "Show", OPDVisit.deleted_at.is_(None))
-            .group_by(Doctor.doctor_name)
-            .order_by(func.count(OPDVisit.visit_id).desc())
-        )
+            SELECT * FROM agg
+        """)
 
-        total = query.count()
-        results = query.offset((page - 1) * limit).limit(limit).all()
+        rows = db.execute(sql, {"limit": limit, "offset": (page - 1) * limit}).mappings().all()
+        total = int(rows[0]["total_count"]) if rows else 0
 
         return {
             "data": [
                 {
-                    "doctor_name":   r.doctor_name,
-                    "total_visits":  r.total_visits,
-                    "total_revenue": float(r.total_revenue),
-                    "avg_fee":       round(float(r.avg_fee), 2)
-                } for r in results
+                    "doctor_name":    r["doctor_name"],
+                    "specialization": r["specialization"],
+                    "total_visits":   r["total_visits"],
+                    "total_revenue":  round(float(r["total_revenue"]), 2),
+                    "avg_fee":        round(float(r["avg_fee"]), 2),
+                } for r in rows
             ],
-            "total": total
+            "total": total,
         }
 
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── TOP DIAGNOSES (paginated) ────────────────────────────────────────────────
+# ── TOP DIAGNOSES (paginated) ─────────────────────────────────────────────────
 @router.get("/doctors/top-diagnoses")
 def top_diagnoses(
-    page: int = Query(1),
-    limit: int = Query(5),
-    db: Session = Depends(get_db)
+    page:  int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=100),
+    db:    Session = Depends(get_db)
 ):
     try:
-        query = (
-            db.query(
-                Doctor.specialization,
-                OPDDiagnosis.diagnosis_name.label("diagnosis"),
-                func.count(OPDDiagnosis.diagnosis_id).label("count")
+        sql = text("""
+            WITH agg AS (
+                SELECT
+                    d.specialization,
+                    od.diagnosis_name                    AS diagnosis,
+                    COUNT(od.diagnosis_id)               AS count,
+                    COUNT(*) OVER()                      AS total_count
+                FROM opd_diagnosis od
+                INNER JOIN opd_visit v ON v.visit_id  = od.visit_id
+                INNER JOIN doctor   d ON d.doctor_id  = v.doctor_id
+                WHERE od.flag = 'Show' AND od.deleted_at IS NULL
+                GROUP BY d.specialization, od.diagnosis_name
+                ORDER BY count DESC
+                LIMIT  :limit
+                OFFSET :offset
             )
-            .join(OPDVisit, OPDDiagnosis.visit_id == OPDVisit.visit_id)
-            .join(Doctor, OPDVisit.doctor_id == Doctor.doctor_id)
-            .filter(OPDDiagnosis.flag == "Show", OPDDiagnosis.deleted_at.is_(None))
-            .group_by(Doctor.specialization, OPDDiagnosis.diagnosis_name)
-            .order_by(func.count(OPDDiagnosis.diagnosis_id).desc())
-        )
+            SELECT * FROM agg
+        """)
 
-        total = query.count()
-        results = query.offset((page - 1) * limit).limit(limit).all()
+        rows = db.execute(sql, {"limit": limit, "offset": (page - 1) * limit}).mappings().all()
+        total = int(rows[0]["total_count"]) if rows else 0
 
         return {
             "data": [
                 {
-                    "specialization": r.specialization,
-                    "diagnosis":      r.diagnosis,
-                    "count":          r.count
-                } for r in results
+                    "specialization": r["specialization"],
+                    "diagnosis":      r["diagnosis"],
+                    "count":          r["count"],
+                } for r in rows
             ],
-            "total": total
+            "total": total,
         }
 
     except SQLAlchemyError as e:
