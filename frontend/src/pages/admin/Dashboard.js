@@ -4,10 +4,34 @@ import AdminLayout from "../../components/AdminLayout";
 import { CircularProgress, Box, Typography } from "@mui/material";
 
 const statCards = [
-  { key: "branches", label: "Total Branches", icon: "🏢", color: "#3b82f6" },
-  { key: "doctors", label: "Total Doctors", icon: "🩺", color: "#10b981" },
-  { key: "users", label: "Total Users", icon: "👥", color: "#f59e0b" },
-  { key: "visits", label: "Total Visits", icon: "📋", color: "#8b5cf6" },
+  {
+    key: "branches",
+    label: "Total Branches",
+    icon: "🏢",
+    color: "#3b82f6",
+    bg: "#eff6ff",
+  },
+  {
+    key: "doctors",
+    label: "Total Doctors",
+    icon: "🩺",
+    color: "#10b981",
+    bg: "#f0fdf4",
+  },
+  {
+    key: "users",
+    label: "Total Users",
+    icon: "👥",
+    color: "#f59e0b",
+    bg: "#fffbeb",
+  },
+  {
+    key: "visits",
+    label: "Total Visits",
+    icon: "📋",
+    color: "#8b5cf6",
+    bg: "#f5f3ff",
+  },
 ];
 
 function Dashboard() {
@@ -42,33 +66,22 @@ function Dashboard() {
       </Typography>
 
       <div className="dashboard-grid">
-        {statCards.map(({ key, label, icon, color }) => (
-          <div className="card" key={key}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 14,
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: `${color}18`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 20,
-                }}
-              >
+        {statCards.map(({ key, label, icon, color, bg }) => (
+          <div className="card stat-card" key={key}>
+            {/* Icon box */}
+            <div className="stat-icon-row">
+              <div className="stat-icon" style={{ background: bg, color }}>
                 {icon}
               </div>
             </div>
-            <h4>{label}</h4>
-            <h2 style={{ color }}>{data[key] ?? 0}</h2>
+
+            {/* Label */}
+            <div className="stat-label">{label}</div>
+
+            {/* Value */}
+            <div className="stat-value" style={{ color }}>
+              {Number(data[key] ?? 0).toLocaleString("en-IN")}
+            </div>
           </div>
         ))}
       </div>

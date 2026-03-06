@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
-from models.models import Branch, Doctor, Patient, OPDVisit
 from role_checker import admin_required
 
 router = APIRouter(prefix="/admin/dashboard", tags=["Admin Dashboard"])
@@ -15,31 +15,22 @@ def admin_dashboard(
     admin=Depends(admin_required)
 ):
     try:
-        total_branches = db.query(Branch).filter(
-            Branch.flag == "Show",
-            Branch.deleted_at.is_(None)
-        ).count()
+        # Single round-trip instead of 4 separate COUNT queries
+        sql = text("""
+            SELECT
+                (SELECT COUNT(*) FROM branch    WHERE flag = 'Show' AND deleted_at IS NULL) AS branches,
+                (SELECT COUNT(*) FROM doctor    WHERE flag = 'Show' AND deleted_at IS NULL) AS doctors,
+                (SELECT COUNT(*) FROM patient   WHERE flag = 'Show' AND deleted_at IS NULL) AS users,
+                (SELECT COUNT(*) FROM opd_visit WHERE flag = 'Show' AND deleted_at IS NULL) AS visits
+        """)
 
-        total_doctors = db.query(Doctor).filter(
-            Doctor.flag == "Show",
-            Doctor.deleted_at.is_(None)
-        ).count()
-
-        total_users = db.query(Patient).filter(
-            Patient.flag == "Show",
-            Patient.deleted_at.is_(None)
-        ).count()
-
-        total_visits = db.query(OPDVisit).filter(
-            OPDVisit.flag == "Show",
-            OPDVisit.deleted_at.is_(None)
-        ).count()
+        r = db.execute(sql).mappings().one()
 
         return {
-            "branches": total_branches,
-            "doctors":  total_doctors,
-            "users":    total_users,
-            "visits":   total_visits
+            "branches": r["branches"],
+            "doctors":  r["doctors"],
+            "users":    r["users"],
+            "visits":   r["visits"],
         }
 
     except SQLAlchemyError as e:
