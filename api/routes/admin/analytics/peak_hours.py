@@ -10,19 +10,38 @@ from models.models import OPDVisit, Branch
 router = APIRouter(prefix="/admin/analytics", tags=["Analytics - Peak Hours"])
 
 
+# ── BRANCHES LIST ─────────────────────────────────────────────────────────────
+@router.get("/peak-hours/branches")
+def get_branches(db: Session = Depends(get_db)):
+    try:
+        results = db.query(Branch).filter(
+            Branch.flag == "Show",
+            Branch.deleted_at.is_(None)
+        ).all()
+
+        return {
+            "data": [
+                {"branch_id": b.branch_id, "branch_name": b.branch_name}
+                for b in results
+            ]
+        }
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── PEAK HOURS ────────────────────────────────────────────────────────────────
 @router.get("/peak-hours")
 def peak_hours(
     branch_id: Optional[int] = Query(None),
-    db:        Session = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     try:
         query = (
             db.query(
-                Branch.branch_name,
                 extract("hour", OPDVisit.visit_datetime).label("hour"),
-                func.count(OPDVisit.visit_id).label("total_visits")
+                func.count(OPDVisit.visit_id).label("visits")
             )
-            .join(Branch, OPDVisit.branch_id == Branch.branch_id)
             .filter(OPDVisit.flag == "Show", OPDVisit.deleted_at.is_(None))
         )
 
@@ -31,15 +50,17 @@ def peak_hours(
 
         results = (
             query
-            .group_by(Branch.branch_name, extract("hour", OPDVisit.visit_datetime))
-            .order_by(func.count(OPDVisit.visit_id).desc())
+            .group_by(extract("hour", OPDVisit.visit_datetime))
+            .order_by(extract("hour", OPDVisit.visit_datetime))
             .all()
         )
 
-        return [
-            {"branch_name": r.branch_name, "hour": int(r.hour), "total_visits": r.total_visits}
-            for r in results
-        ]
+        return {
+            "data": [
+                {"hour": int(r.hour), "visits": r.visits}
+                for r in results
+            ]
+        }
 
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))
