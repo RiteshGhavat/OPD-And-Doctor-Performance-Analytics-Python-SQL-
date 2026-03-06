@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import API from "../../../api";
 import AdminLayout from "../../../components/AdminLayout";
-
 import {
   Card,
   CardContent,
@@ -15,7 +14,6 @@ import {
   Grid,
   Chip,
 } from "@mui/material";
-
 import {
   BarChart,
   Bar,
@@ -27,11 +25,9 @@ import {
   Cell,
 } from "recharts";
 
-// ---------- Helpers ----------
 const formatHour = (hour) => {
   const h = hour % 12 || 12;
-  const suffix = hour < 12 ? "AM" : "PM";
-  return `${h} ${suffix}`;
+  return `${h} ${hour < 12 ? "AM" : "PM"}`;
 };
 
 export default function PeakHours() {
@@ -40,14 +36,12 @@ export default function PeakHours() {
   const [branchId, setBranchId] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ================= FETCH BRANCHES =================
   useEffect(() => {
     API.get("/admin/analytics/peak-hours/branches")
       .then((res) => setBranches(res.data.data || []))
       .catch(console.error);
   }, []);
 
-  // ================= FETCH PEAK HOURS =================
   useEffect(() => {
     setLoading(true);
     API.get("/admin/analytics/peak-hours", {
@@ -55,9 +49,7 @@ export default function PeakHours() {
     })
       .then((res) => {
         const raw = res.data.data || [];
-
-        const hours = Array.from({ length: 24 }, (_, i) => i);
-        const formatted = hours.map((h) => {
+        const formatted = Array.from({ length: 24 }, (_, h) => {
           const found = raw.find((r) => r.hour === h);
           return {
             hour: h,
@@ -65,34 +57,28 @@ export default function PeakHours() {
             visits: found ? found.visits : 0,
           };
         });
-
         setData(formatted);
       })
       .finally(() => setLoading(false));
   }, [branchId]);
 
-  // ================= PEAK HOUR =================
   const peak = useMemo(() => {
     if (!data.length) return null;
-    return data.reduce((max, cur) =>
-      cur.visits > max.visits ? cur : max
-    );
+    return data.reduce((max, cur) => (cur.visits > max.visits ? cur : max));
   }, [data]);
 
   return (
     <AdminLayout>
-      <Typography variant="h4" fontWeight={700} gutterBottom>
+      <Typography variant="h5" fontWeight={700} gutterBottom>
         Peak Hours Analytics
       </Typography>
-
       <Typography variant="body2" color="text.secondary" mb={3}>
         Identify high-traffic hours to optimize staffing and OPD flow
       </Typography>
 
-      {/* ================= FILTER + SUMMARY ================= */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item>
-          <FormControl sx={{ minWidth: 220 }}>
+      <Grid container spacing={2} mb={3} alignItems="center">
+        <Grid item xs={12} sm="auto">
+          <FormControl sx={{ minWidth: 220 }} size="small">
             <InputLabel>Branch</InputLabel>
             <Select
               value={branchId}
@@ -112,23 +98,21 @@ export default function PeakHours() {
         </Grid>
 
         {peak && peak.visits > 0 && (
-          <Grid item alignSelf="center">
+          <Grid item>
             <Chip
               color="primary"
-              label={`Peak Hour: ${peak.label} (${peak.visits} visits)`}
+              label={`🔥 Peak: ${peak.label} — ${peak.visits} visits`}
             />
           </Grid>
         )}
       </Grid>
 
-      {/* ================= CHART ================= */}
-      <Card sx={{ borderRadius: 3, boxShadow: 3 }}>
+      <Card sx={{ borderRadius: 3, boxShadow: 1, border: "1px solid #e2e8f0" }}>
         <CardContent>
           <Typography variant="h6" fontWeight={600} mb={2}>
             Hour-wise Patient Visits
           </Typography>
-
-          <Box sx={{ width: "100%", height: 420 }}>
+          <Box sx={{ width: "100%", height: { xs: 280, sm: 380, md: 420 } }}>
             {loading ? (
               <Box
                 height="100%"
@@ -140,27 +124,36 @@ export default function PeakHours() {
               </Box>
             ) : (
               <ResponsiveContainer>
-                <BarChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                <BarChart
+                  data={data}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 60 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#f1f5f9"
+                  />
                   <XAxis
                     dataKey="label"
-                    interval={1}
-                    angle={-35}
+                    angle={-40}
                     textAnchor="end"
                     height={70}
+                    tick={{ fontSize: 11 }}
                   />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip
-                    formatter={(v) => [`${v} visits`, "Patients"]}
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 11 }}
+                    width={40}
                   />
-                  <Bar dataKey="visits" radius={[6, 6, 0, 0]}>
-                    {data.map((entry, index) => (
+                  <Tooltip formatter={(v) => [`${v} visits`, "Patients"]} />
+                  <Bar dataKey="visits" radius={[6, 6, 0, 0]} maxBarSize={35}>
+                    {data.map((entry, i) => (
                       <Cell
-                        key={index}
+                        key={i}
                         fill={
                           peak && entry.hour === peak.hour
-                            ? "#d32f2f" // highlight peak
-                            : "#1976d2"
+                            ? "#ef4444"
+                            : "#3b82f6"
                         }
                       />
                     ))}

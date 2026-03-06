@@ -11,11 +11,13 @@ import {
   TextField,
   Snackbar,
   Alert,
-  Grid
+  Grid,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import AdminLayout from "../../components/AdminLayout";
 import API from "../../api";
+
+const emptyForm = { branch_name: "", city: "", address: "", phone: "" };
 
 export default function BranchManagement() {
   const [rows, setRows] = useState([]);
@@ -23,21 +25,13 @@ export default function BranchManagement() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
-
   const [open, setOpen] = useState(false);
   const [editData, setEditData] = useState(null);
-
-  const [form, setForm] = useState({
-    branch_name: "",
-    city: "",
-    address: "",
-    phone: ""
-  });
-
+  const [form, setForm] = useState(emptyForm);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success"
+    severity: "success",
   });
 
   useEffect(() => {
@@ -46,17 +40,21 @@ export default function BranchManagement() {
 
   const fetchBranches = async () => {
     setLoading(true);
-    const res = await API.get(
-      `/admin/branch?page=${page + 1}&limit=${pageSize}`
-    );
-    setRows(res.data.data);
-    setTotal(res.data.total);
-    setLoading(false);
+    try {
+      const res = await API.get(
+        `/admin/branch?page=${page + 1}&limit=${pageSize}`,
+      );
+      setRows(res.data.data);
+      setTotal(res.data.total);
+    } catch {
+      showSnackbar("Failed to fetch branches", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const handleSubmit = async () => {
     try {
@@ -75,28 +73,33 @@ export default function BranchManagement() {
   };
 
   const handleDelete = async (id) => {
-    await API.post(`/admin/branch/${id}/soft-delete`);
-    showSnackbar("Branch deleted successfully");
-    fetchBranches();
+    if (!window.confirm("Delete this branch?")) return;
+    try {
+      await API.post(`/admin/branch/${id}/soft-delete`);
+      showSnackbar("Branch deleted successfully");
+      fetchBranches();
+    } catch {
+      showSnackbar("Delete failed", "error");
+    }
   };
 
-  const showSnackbar = (message, severity = "success") => {
+  const showSnackbar = (message, severity = "success") =>
     setSnackbar({ open: true, message, severity });
-  };
 
   const columns = [
-    { field: "branch_id", headerName: "ID", width: 80 },
-    { field: "branch_name", headerName: "Branch Name", flex: 1 },
-    { field: "city", headerName: "City", flex: 1 },
-    { field: "phone", headerName: "Phone", flex: 1 },
+    { field: "branch_id", headerName: "ID", width: 70 },
+    { field: "branch_name", headerName: "Branch Name", flex: 1, minWidth: 140 },
+    { field: "city", headerName: "City", flex: 1, minWidth: 110 },
+    { field: "phone", headerName: "Phone", flex: 1, minWidth: 120 },
     {
       field: "actions",
       headerName: "Actions",
       width: 180,
       renderCell: (params) => (
-        <>
+        <div style={{ display: "flex", gap: 6 }}>
           <Button
             size="small"
+            variant="contained"
             onClick={() => {
               setEditData(params.row);
               setForm(params.row);
@@ -108,30 +111,36 @@ export default function BranchManagement() {
           <Button
             size="small"
             color="error"
+            variant="contained"
             onClick={() => handleDelete(params.row.branch_id)}
           >
             Delete
           </Button>
-        </>
-      )
-    }
+        </div>
+      ),
+    },
   ];
 
   return (
     <AdminLayout>
-      <Typography variant="h5" sx={{ mb: 2 }}>
+      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
         Branch Management
       </Typography>
 
-      <Button variant="contained" onClick={() => {
-        setEditData(null);
-        setForm({ branch_name: "", city: "", address: "", phone: "" });
-        setOpen(true);
-      }}>
-        Add Branch
+      <Button
+        variant="contained"
+        className="primary-btn"
+        sx={{ mb: 2 }}
+        onClick={() => {
+          setEditData(null);
+          setForm(emptyForm);
+          setOpen(true);
+        }}
+      >
+        + Add Branch
       </Button>
 
-      <Card sx={{ mt: 2 }}>
+      <Card className="table-card">
         <CardContent>
           <div style={{ height: 500 }}>
             <DataGrid
@@ -146,33 +155,37 @@ export default function BranchManagement() {
                 setPage(model.page);
                 setPageSize(model.pageSize);
               }}
+              pageSizeOptions={[10, 20, 50]}
             />
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>{editData ? "Edit Branch" : "Add Branch"}</DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                label="Branch Name"
-                name="branch_name"
-                fullWidth
-                value={form.branch_name}
-                onChange={handleChange}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="City" name="city" fullWidth value={form.city} onChange={handleChange} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Address" name="address" fullWidth value={form.address} onChange={handleChange} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Phone" name="phone" fullWidth value={form.phone} onChange={handleChange} />
-            </Grid>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            {[
+              { label: "Branch Name", name: "branch_name" },
+              { label: "City", name: "city" },
+              { label: "Address", name: "address" },
+              { label: "Phone", name: "phone" },
+            ].map(({ label, name }) => (
+              <Grid item xs={12} key={name}>
+                <TextField
+                  label={label}
+                  name={name}
+                  fullWidth
+                  value={form[name]}
+                  onChange={handleChange}
+                />
+              </Grid>
+            ))}
           </Grid>
         </DialogContent>
         <DialogActions>

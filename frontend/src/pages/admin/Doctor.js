@@ -12,13 +12,11 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   Snackbar,
   Alert,
   MenuItem,
 } from "@mui/material";
-
 import { DataGrid } from "@mui/x-data-grid";
 
 function Doctor() {
@@ -28,15 +26,14 @@ function Doctor() {
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedDoctor, setSelectedDoctor] = useState(null);
-
+  const [selectedDoc, setSelectedDoc] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     branch_id: "",
     doctor_name: "",
     specialization: "",
@@ -45,7 +42,8 @@ function Doctor() {
     consultation_fee: "",
     joining_date: "",
     status: "Active",
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     fetchDoctors();
@@ -60,7 +58,6 @@ function Doctor() {
       showSnackbar("Failed to fetch doctors", "error");
     }
   };
-
   const fetchBranches = async () => {
     try {
       const res = await API.get("/branch/");
@@ -70,38 +67,24 @@ function Doctor() {
     }
   };
 
-  const showSnackbar = (message, severity = "success") => {
+  const showSnackbar = (message, severity = "success") =>
     setSnackbar({ open: true, message, severity });
-  };
 
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const resetForm = () => {
-    setForm({
-      branch_id: "",
-      doctor_name: "",
-      specialization: "",
-      qualification: "",
-      experience_years: "",
-      consultation_fee: "",
-      joining_date: "",
-      status: "Active",
-    });
+    setForm(emptyForm);
     setEditId(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!form.branch_id || !form.doctor_name) {
       showSnackbar("Branch and Doctor Name are required", "error");
       return;
     }
-
     setLoading(true);
-
     try {
       if (editId) {
         await API.put(`/doctor/${editId}`, form);
@@ -110,7 +93,6 @@ function Doctor() {
         await API.post("/doctor/", form);
         showSnackbar("Doctor created successfully");
       }
-
       fetchDoctors();
       resetForm();
     } catch (err) {
@@ -131,19 +113,13 @@ function Doctor() {
       joining_date: row.joining_date ? row.joining_date.substring(0, 10) : "",
       status: row.status || "Active",
     });
-
     setEditId(row.doctor_id);
-  };
-
-  const openDeleteDialog = (doctor) => {
-    setSelectedDoctor(doctor);
-    setOpenDialog(true);
   };
 
   const confirmDelete = async () => {
     try {
-      setDeletingId(selectedDoctor.doctor_id);
-      await API.post(`/doctor/${selectedDoctor.doctor_id}/soft-delete`);
+      setDeletingId(selectedDoc.doctor_id);
+      await API.post(`/doctor/${selectedDoc.doctor_id}/soft-delete`);
       showSnackbar("Doctor deleted successfully");
       fetchDoctors();
     } catch {
@@ -154,27 +130,35 @@ function Doctor() {
     }
   };
 
-  const rowsWithIndex = useMemo(() => {
-    return doctors.map((doc, index) => ({
-      ...doc,
-      sr_no: index + 1,
-    }));
-  }, [doctors]);
+  const rowsWithIndex = useMemo(
+    () => doctors.map((doc, index) => ({ ...doc, sr_no: index + 1 })),
+    [doctors],
+  );
 
   const columns = [
-    { field: "sr_no", headerName: "SR No.", width: 90 },
-    { field: "doctor_name", headerName: "Name", flex: 1 },
-    { field: "branch_name", headerName: "Branch", flex: 1 },
-    { field: "specialization", headerName: "Specialization", flex: 1 },
-    { field: "qualification", headerName: "Qualification", flex: 1 },
-    { field: "experience_years", headerName: "Experience", flex: 1 },
-    { field: "consultation_fee", headerName: "Fee", flex: 1 },
-    { field: "joining_date", headerName: "Joining Date", flex: 1 },
-    { field: "status", headerName: "Status", flex: 1 },
+    { field: "sr_no", headerName: "SR", width: 60 },
+    { field: "doctor_name", headerName: "Name", flex: 1, minWidth: 130 },
+    { field: "branch_name", headerName: "Branch", flex: 1, minWidth: 110 },
+    {
+      field: "specialization",
+      headerName: "Specialization",
+      flex: 1,
+      minWidth: 130,
+    },
+    {
+      field: "qualification",
+      headerName: "Qualification",
+      flex: 1,
+      minWidth: 120,
+    },
+    { field: "experience_years", headerName: "Exp", width: 70 },
+    { field: "consultation_fee", headerName: "Fee", width: 80 },
+    { field: "joining_date", headerName: "Joining", width: 110 },
+    { field: "status", headerName: "Status", width: 90 },
     {
       field: "edit",
       headerName: "Edit",
-      width: 100,
+      width: 90,
       renderCell: (params) => (
         <Button
           size="small"
@@ -188,14 +172,17 @@ function Doctor() {
     {
       field: "delete",
       headerName: "Delete",
-      width: 110,
+      width: 100,
       renderCell: (params) => (
         <Button
           size="small"
           color="error"
           variant="contained"
           disabled={deletingId === params.row.doctor_id}
-          onClick={() => openDeleteDialog(params.row)}
+          onClick={() => {
+            setSelectedDoc(params.row);
+            setOpenDialog(true);
+          }}
         >
           Delete
         </Button>
@@ -203,14 +190,11 @@ function Doctor() {
     },
   ];
 
-  
-
   return (
     <AdminLayout>
       <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
         Doctor Management
       </Typography>
-
 
       <Card className="form-card" sx={{ mb: 4 }}>
         <CardContent>
@@ -219,39 +203,34 @@ function Doctor() {
           </Typography>
 
           <form onSubmit={handleSubmit}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={3}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Doctor Name"
                   name="doctor_name"
                   value={form.doctor_name}
                   onChange={handleChange}
                   required
-                  size="small"
-                  variant="outlined"
                 />
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   select
                   fullWidth
+                  size="small"
                   label="Branch"
                   name="branch_id"
                   value={form.branch_id}
                   onChange={handleChange}
                   required
-                  size="small"
-                  SelectProps={{
-                    displayEmpty: true,
-                  }}
                   InputLabelProps={{ shrink: true }}
                 >
                   <MenuItem value="">
                     <em>Select Branch</em>
                   </MenuItem>
-
                   {branches.map((b) => (
                     <MenuItem key={b.branch_id} value={b.branch_id}>
                       {b.branch_name}
@@ -260,82 +239,81 @@ function Doctor() {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Specialization"
                   name="specialization"
                   value={form.specialization}
                   onChange={handleChange}
-                  size="small"
                 />
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Qualification"
                   name="qualification"
                   value={form.qualification}
                   onChange={handleChange}
-                  size="small"
                 />
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Experience (Years)"
                   name="experience_years"
                   type="number"
                   value={form.experience_years}
                   onChange={handleChange}
-                  size="small"
                 />
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Consultation Fee"
                   name="consultation_fee"
                   type="number"
                   value={form.consultation_fee}
                   onChange={handleChange}
-                  size="small"
                 />
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Joining Date"
                   name="joining_date"
                   type="date"
                   value={form.joining_date}
                   onChange={handleChange}
                   InputLabelProps={{ shrink: true }}
-                  size="small"
                 />
               </Grid>
 
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <TextField
                   select
                   fullWidth
+                  size="small"
                   label="Status"
                   name="status"
                   value={form.status}
                   onChange={handleChange}
-                  size="small"
                 >
                   <MenuItem value="Active">Active</MenuItem>
                   <MenuItem value="Deactive">Deactive</MenuItem>
                 </TextField>
               </Grid>
 
-          
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <div className="form-buttons">
                   <Button
                     variant="contained"
@@ -349,7 +327,6 @@ function Doctor() {
                         ? "Update Doctor"
                         : "Add Doctor"}
                   </Button>
-
                   <Button
                     variant="outlined"
                     onClick={resetForm}
@@ -363,7 +340,6 @@ function Doctor() {
           </form>
         </CardContent>
       </Card>
-
 
       <Card className="table-card">
         <CardContent>
@@ -380,6 +356,28 @@ function Doctor() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+        <DialogTitle>Delete Doctor</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete{" "}
+          <strong>{selectedDoc?.doctor_name}</strong>?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDelete}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+      </Snackbar>
     </AdminLayout>
   );
 }

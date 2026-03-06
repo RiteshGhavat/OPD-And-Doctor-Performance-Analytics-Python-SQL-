@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../../../api";
 import AdminLayout from "../../../components/AdminLayout";
-
 import {
   Card,
   CardContent,
@@ -20,48 +19,61 @@ export default function DoctorsAnalytics() {
   const [diag, setDiag] = useState({ data: [], total: 0, page: 0, rows: 5 });
 
   const load = async (url, state, setter) => {
-    const res = await API.get(url, {
-      params: { page: state.page + 1, limit: state.rows },
-    });
-    setter({ ...state, data: res.data.data, total: res.data.total });
+    try {
+      const res = await API.get(url, {
+        params: { page: state.page + 1, limit: state.rows },
+      });
+      setter((prev) => ({
+        ...prev,
+        data: res.data.data,
+        total: res.data.total,
+      }));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
     load("/admin/analytics/doctors/opd-load", opd, setOpd);
   }, [opd.page, opd.rows]);
-
   useEffect(() => {
     load("/admin/analytics/doctors/performance", perf, setPerf);
   }, [perf.page, perf.rows]);
-
   useEffect(() => {
     load("/admin/analytics/doctors/top-diagnoses", diag, setDiag);
   }, [diag.page, diag.rows]);
 
-  const table = (title, headers, rows, state, setState) => (
-    <Card sx={{ mb: 3 }}>
+  const renderTable = (title, headers, rows, state, setState) => (
+    <Card
+      sx={{ mb: 3, borderRadius: 3, boxShadow: 1, border: "1px solid #e2e8f0" }}
+    >
       <CardContent>
-        <Typography variant="h6">{title}</Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              {headers.map((h) => (
-                <TableCell key={h}>{h}</TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>{rows}</TableBody>
-        </Table>
-
+        <Typography variant="h6" fontWeight={600} mb={2}>
+          {title}
+        </Typography>
+        <div style={{ overflowX: "auto" }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ background: "#f8fafc" }}>
+                {headers.map((h) => (
+                  <TableCell key={h}>
+                    <b>{h}</b>
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>{rows}</TableBody>
+          </Table>
+        </div>
         <TablePagination
           component="div"
           count={state.total}
           page={state.page}
           rowsPerPage={state.rows}
           rowsPerPageOptions={[5, 10, 25]}
-          onPageChange={(e, p) => setState({ ...state, page: p })}
+          onPageChange={(e, p) => setState((prev) => ({ ...prev, page: p }))}
           onRowsPerPageChange={(e) =>
-            setState({ ...state, rows: +e.target.value, page: 0 })
+            setState((prev) => ({ ...prev, rows: +e.target.value, page: 0 }))
           }
         />
       </CardContent>
@@ -70,15 +82,18 @@ export default function DoctorsAnalytics() {
 
   return (
     <AdminLayout>
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+      <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>
         Doctor Analytics
       </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        OPD load, performance metrics, and diagnosis trends per doctor
+      </Typography>
 
-      {table(
+      {renderTable(
         "Doctor-wise OPD Load",
         ["Doctor", "Branch", "Month", "Visits"],
         opd.data.map((r, i) => (
-          <TableRow key={i}>
+          <TableRow key={i} hover>
             <TableCell>{r.doctor_name}</TableCell>
             <TableCell>{r.branch_name}</TableCell>
             <TableCell>{r.month}</TableCell>
@@ -89,26 +104,26 @@ export default function DoctorsAnalytics() {
         setOpd,
       )}
 
-      {table(
+      {renderTable(
         "Doctor Performance",
         ["Doctor", "Visits", "Revenue", "Avg Fee"],
         perf.data.map((r, i) => (
-          <TableRow key={i}>
+          <TableRow key={i} hover>
             <TableCell>{r.doctor_name}</TableCell>
             <TableCell>{r.total_visits}</TableCell>
-            <TableCell>₹ {r.total_revenue}</TableCell>
-            <TableCell>₹ {r.avg_fee}</TableCell>
+            <TableCell>₹ {Number(r.total_revenue)?.toLocaleString()}</TableCell>
+            <TableCell>₹ {Number(r.avg_fee)?.toLocaleString()}</TableCell>
           </TableRow>
         )),
         perf,
         setPerf,
       )}
 
-      {table(
-        "Top Diagnoses",
+      {renderTable(
+        "Top Diagnoses per Specialization",
         ["Specialization", "Diagnosis", "Count"],
         diag.data.map((r, i) => (
-          <TableRow key={i}>
+          <TableRow key={i} hover>
             <TableCell>{r.specialization}</TableCell>
             <TableCell>{r.diagnosis}</TableCell>
             <TableCell>{r.count}</TableCell>
